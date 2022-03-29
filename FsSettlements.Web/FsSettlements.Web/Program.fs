@@ -67,15 +67,21 @@ module Program =
         let getDefaultPage = getPage { Limit = 40; Page = 1 } 
         tryBindQuery<PageQuery> (fun _ -> getDefaultPage) None getPage
         
+    let ignoreIds =
+        bindJson<Guid list> (fun ids ->
+            String.Join("\n", ids)
+            |> text)
+        
     let settlementsRoute =
         router {
             get "/" (json settlements)
             get "/withPagination" getPagedSettlementsHandler
+            post "ignore" ignoreIds
         }
     let app =
         application {
             use_router settlementsRoute
-            url "http://0.0.0.0:8085/"
+            url "http://localhost:8085/"
             memory_cache
             use_static "static"
             use_gzip
