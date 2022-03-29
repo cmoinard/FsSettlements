@@ -1,15 +1,14 @@
 #r "nuget: FsHttp"
 #r "nuget: Newtonsoft.Json"
 
-open System
 open FsHttp
 open FsHttp.DslCE
 open FSharp.Data
 open Newtonsoft.Json
 
+let limit = 40
 let baseUrl = "http://localhost:8085"
-let withoutPagingUrl = baseUrl
-let withPagingUrl = baseUrl + "/withPagination"
+let pendingUrl = baseUrl + "/withPagination"
 let ignoreUrl = baseUrl + "/ignore"
 
 type SettlementsResponse = JsonProvider< """
@@ -28,12 +27,32 @@ let getIdsToIgnore (response: SettlementsResponse.Root) =
     |> Array.map (fun s -> s.Id)
 
 let idsToIgnore =
-    http {
-        GET withoutPagingUrl
+    let getPage (page: int) =
+        http {
+            GET pendingUrl
+            query [
+                "limit", string limit
+                "page", string page
+            ]
+        }
+        |> (fun c -> c.content.ReadAsStringAsync().Result)
+        |> SettlementsResponse.Parse
+
+    seq {
+        let page1 = getPage 1
+        yield page1
+
+        let pagesCount = 1 + (page1.Count / limit)
+        if pagesCount > 1 then
+            yield!
+                [2..pagesCount]
+                |> Seq.map getPage
+        
     }
-    |> (fun c -> c.content.ReadAsStringAsync().Result)
-    |> SettlementsResponse.Parse
-    |> getIdsToIgnore
+    |> Seq.collect (fun p -> p.Items)
+    |> Seq.filter (fun s -> s.ContractEndDate.Year < 2022)
+    |> Seq.map (fun s -> s.Id)
+    |> Seq.toList
 
 printfn "%i settlements to ignore" idsToIgnore.Length
 

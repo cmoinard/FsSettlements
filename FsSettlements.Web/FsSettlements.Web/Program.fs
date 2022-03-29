@@ -45,7 +45,7 @@ module Program =
                   }
                 })
             
-    let settlements =
+    let mutable settlements =
         let generatedSettlements = settlementFaker.Generate(820)
         
         {
@@ -55,12 +55,22 @@ module Program =
         
     let getPagedSettlementsHandler =
         let getPage query =
+            let nbItemsToSkip =
+                Math.Min(
+                    settlements.Items.Length,
+                    (query.Page - 1) * query.Limit)
+            
+            let nbItemsToTake =
+                Math.Min(
+                    query.Limit,
+                    settlements.Items.Length - nbItemsToSkip)
+            
             {
                 Count = settlements.Count
                 Items =
                     settlements.Items
-                    |> List.skip ((query.Page - 1) * query.Limit)
-                    |> List.take query.Limit
+                    |> List.skip nbItemsToSkip
+                    |> List.take nbItemsToTake
             }            
             |> json
             
@@ -69,14 +79,28 @@ module Program =
         
     let ignoreIds =
         bindJson<Guid list> (fun ids ->
+            let settlementsToIgnore =
+                settlements.Items
+                |> List.filter (fun s ->
+                    ids |> List.exists ((=) s.Id))
+                
+            let settlementsAfterIgnore =
+                settlements.Items |> List.except settlementsToIgnore
+                
+            settlements <-
+                {
+                    Items = settlementsAfterIgnore
+                    Count = settlementsAfterIgnore.Length
+                }
+            
             String.Join("\n", ids)
             |> text)
         
     let settlementsRoute =
         router {
             get "/" (json settlements)
-            get "/withPagination" getPagedSettlementsHandler
-            post "ignore" ignoreIds
+            get "/withPagination" (warbler (fun _ -> getPagedSettlementsHandler))
+            post "ignore" (warbler (fun _ -> ignoreIds))
         }
     let app =
         application {
