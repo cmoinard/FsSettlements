@@ -98,13 +98,19 @@ module Program =
         
     let settlementsRoute =
         router {
-            get "/" (json settlements)
-            get "/withPagination" (warbler (fun _ -> getPagedSettlementsHandler))
-            post "ignore" (warbler (fun _ -> ignoreIds))
+            get "/pending" (json settlements)
+            get "/withPaging" (warbler (fun _ -> getPagedSettlementsHandler))
+            post "/ignore" (warbler (fun _ -> ignoreIds))
         }
+        
+    let mainRoute =
+        router {
+            forward "/settlements" settlementsRoute
+        }
+        
     let app =
         application {
-            use_router settlementsRoute
+            use_router mainRoute
             url "http://localhost:8085/"
             memory_cache
             use_static "static"
